@@ -138,3 +138,38 @@ fn malformed_models_are_errors_not_panics() {
         assert!(matches!(generate(&model, &Options::default()), Err(Error::InvalidInput(_))), "{model:?}");
     }
 }
+
+#[test]
+fn feasibility_reports_impossible_forced_sets_before_unsatisfiable_models() {
+    use lattice_engine::{Engine, Error};
+    // a=0 and b=0 can't coexist; forcing them together is impossible.
+    let mut model = plain(&[2, 2, 2], 2);
+    model.invalid_pairs = vec![((0, 0), (1, 0))];
+    model.forced = vec![vec![(0, 1)], vec![(0, 0), (1, 0)]];
+    let mut engine = Engine::new(model.clone()).unwrap();
+    assert_eq!(engine.feasibility(), Err(Error::ForcedInfeasible(1)));
+    assert_eq!(generate(&model, &Options::default()), Err(Error::ForcedInfeasible(1)));
+
+    // Every value of parameter 0 conflicts with something required: no valid row.
+    let mut none = plain(&[2, 2], 2);
+    none.invalid_pairs = vec![((0, 0), (1, 0)), ((0, 0), (1, 1)), ((0, 1), (1, 0)), ((0, 1), (1, 1))];
+    let mut engine = Engine::new(none.clone()).unwrap();
+    assert_eq!(engine.feasibility(), Err(Error::NoValidAssignments));
+    none.forced = vec![vec![(0, 0)]];
+    assert_eq!(Engine::new(none).unwrap().feasibility(), Err(Error::ForcedInfeasible(0)));
+}
+
+#[test]
+fn can_complete_answers_partial_assignments() {
+    use lattice_engine::{Engine, Error};
+    let mut model = plain(&[3, 2, 2], 2);
+    model.requires = vec![((0, 2), (1, 1))];
+    model.invalid_pairs = vec![((1, 1), (2, 0))];
+    let mut engine = Engine::new(model).unwrap();
+    assert_eq!(engine.can_complete(&[]), Ok(true));
+    assert_eq!(engine.can_complete(&[(0, 2)]), Ok(true));
+    assert_eq!(engine.can_complete(&[(0, 2), (2, 0)]), Ok(false)); // implied b=1 conflicts with c=0
+    assert_eq!(engine.can_complete(&[(0, 2), (1, 0)]), Ok(false));
+    assert_eq!(engine.can_complete(&[(0, 0), (0, 1)]), Ok(false));
+    assert!(matches!(engine.can_complete(&[(3, 0)]), Err(Error::InvalidInput(_))));
+}

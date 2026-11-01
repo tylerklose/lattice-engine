@@ -59,6 +59,8 @@ pub struct Generated {
 pub enum Error {
     /// The model is malformed: the message says how.
     InvalidInput(String),
+    /// The forced interaction at this index can't appear in any valid row.
+    ForcedInfeasible(usize),
     NoValidAssignments,
     DeadEnd,
     InvalidRow(Vec<usize>),
@@ -516,12 +518,57 @@ fn check(model: &Model) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn generate(model: &Model, options: &Options) -> Result<Generated, Error> {
-    check(model)?;
-    let mut constraints = Constraints::new(model);
-    if !constraints.can_complete(&[]) {
-        return Err(Error::NoValidAssignments);
+/// A checked model with a feasibility cache, for repeated questions about it.
+pub struct Engine {
+    model: Model,
+    constraints: Constraints,
+}
+
+impl Engine {
+    /// Rejects malformed models; feasibility is checked by `feasibility`.
+    pub fn new(model: Model) -> Result<Self, Error> {
+        check(&model)?;
+        let constraints = Constraints::new(&model);
+        Ok(Engine { model, constraints })
     }
+
+    pub fn model(&self) -> &Model {
+        &self.model
+    }
+
+    /// Whether some valid row contains every one of `assignments`.
+    pub fn can_complete(&mut self, assignments: &[Assignment]) -> Result<bool, Error> {
+        if let Some(bad) = assignments.iter().find(|&&(p, v)| p >= self.model.sizes.len() || v >= self.model.sizes[p]) {
+            return Err(Error::InvalidInput(format!("assignment {bad:?} is out of range")));
+        }
+        Ok(self.constraints.can_complete(assignments))
+    }
+
+    /// The first forced interaction no valid row can hold, then whether any
+    /// valid row exists at all.
+    pub fn feasibility(&mut self) -> Result<(), Error> {
+        for (i, forced) in self.model.forced.iter().enumerate() {
+            if !self.constraints.can_complete(forced) {
+                return Err(Error::ForcedInfeasible(i));
+            }
+        }
+        if !self.constraints.can_complete(&[]) {
+            return Err(Error::NoValidAssignments);
+        }
+        Ok(())
+    }
+
+    pub fn generate(&mut self, options: &Options) -> Result<Generated, Error> {
+        self.feasibility()?;
+        build(&self.model, &mut self.constraints, options)
+    }
+}
+
+pub fn generate(model: &Model, options: &Options) -> Result<Generated, Error> {
+    Engine::new(model.clone())?.generate(options)
+}
+
+fn build(model: &Model, constraints: &mut Constraints, options: &Options) -> Result<Generated, Error> {
     let mut coverage = Coverage::new(&model.sizes, model.strength);
 
     let mut infeasible = 0;
@@ -563,7 +610,7 @@ pub fn generate(model: &Model, options: &Options) -> Result<Generated, Error> {
             } else {
                 &starts[(rng.next() % starts.len() as u64) as usize]
             };
-            let Some(row) = build_row(begin, attempt, &mut rng, model, &mut constraints, &coverage) else { continue };
+            let Some(row) = build_row(begin, attempt, &mut rng, model, constraints, &coverage) else { continue };
             let gain = coverage.gain(&row);
             if best_row.as_ref().is_none_or(|(g, _)| gain > *g) {
                 best_row = Some((gain, row));
