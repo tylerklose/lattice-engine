@@ -22,7 +22,10 @@ fn combos(n: usize, k: usize) -> Vec<Vec<usize>> {
 fn all_rows(sizes: &[usize]) -> Vec<Vec<usize>> {
     let mut rows = vec![vec![]];
     for &n in sizes {
-        rows = rows.into_iter().flat_map(|r| (0..n).map(move |v| [r.clone(), vec![v]].concat())).collect();
+        rows = rows
+            .into_iter()
+            .flat_map(|r| (0..n).map(move |v| [r.clone(), vec![v]].concat()))
+            .collect();
     }
     rows
 }
@@ -31,7 +34,10 @@ fn valid(model: &Model, row: &[usize]) -> bool {
     let holds = |a: Assignment| row[a.0] == a.1;
     model.invalid_pairs.iter().all(|&(a, b)| !(holds(a) && holds(b)))
         && model.requires.iter().all(|&(a, b)| !holds(a) || holds(b))
-        && model.higher_order.iter().all(|(ants, f)| !(ants.iter().all(|&a| holds(a)) && holds(*f)))
+        && model
+            .higher_order
+            .iter()
+            .all(|(ants, f)| !(ants.iter().all(|&a| holds(a)) && holds(*f)))
 }
 
 fn check(model: &Model, options: &Options) -> usize {
@@ -41,7 +47,10 @@ fn check(model: &Model, options: &Options) -> usize {
         assert!(valid(model, row), "invalid row {row:?}");
     }
     for forced in &model.forced {
-        assert!(result.rows.iter().any(|r| forced.iter().all(|&(p, v)| r[p] == v)), "forced {forced:?} missing");
+        assert!(
+            result.rows.iter().any(|r| forced.iter().all(|&(p, v)| r[p] == v)),
+            "forced {forced:?} missing"
+        );
     }
     let mut needed = 0;
     for combo in combos(model.sizes.len(), model.strength) {
@@ -52,7 +61,10 @@ fn check(model: &Model, options: &Options) -> usize {
         for tuple in seen {
             needed += 1;
             assert!(
-                result.rows.iter().any(|r| combo.iter().zip(&tuple).all(|(&p, &v)| r[p] == v)),
+                result
+                    .rows
+                    .iter()
+                    .any(|r| combo.iter().zip(&tuple).all(|(&p, &v)| r[p] == v)),
                 "tuple {combo:?}={tuple:?} not covered"
             );
         }
@@ -77,7 +89,13 @@ fn plain(sizes: &[usize], strength: usize) -> Model {
 
 #[test]
 fn unconstrained_models() {
-    for (sizes, strength) in [(vec![3, 3, 3, 3], 2), (vec![2; 10], 2), (vec![4, 3, 2, 2, 3], 2), (vec![3; 6], 3), (vec![2, 3, 4], 3)] {
+    for (sizes, strength) in [
+        (vec![3, 3, 3, 3], 2),
+        (vec![2; 10], 2),
+        (vec![4, 3, 2, 2, 3], 2),
+        (vec![3; 6], 3),
+        (vec![2, 3, 4], 3),
+    ] {
         check(&plain(&sizes, strength), &Options::default());
     }
 }
@@ -97,8 +115,20 @@ fn every_constraint_primitive() {
     model.higher_order = vec![(vec![(0, 2), (1, 1)], (2, 0))];
     model.forced = vec![vec![(0, 2), (4, 1), (3, 0)]];
     check(&model, &Options::default());
-    check(&model, &Options { shrink_steps: 0, ..Options::default() });
-    check(&model, &Options { candidates: 1, ..Options::default() });
+    check(
+        &model,
+        &Options {
+            shrink_steps: 0,
+            ..Options::default()
+        },
+    );
+    check(
+        &model,
+        &Options {
+            candidates: 1,
+            ..Options::default()
+        },
+    );
 }
 
 #[test]
@@ -107,7 +137,14 @@ fn same_input_same_output() {
     let a = generate(&model, &Options::default()).unwrap();
     let b = generate(&model, &Options::default()).unwrap();
     assert_eq!(a, b);
-    let c = generate(&model, &Options { seed: 7, ..Options::default() }).unwrap();
+    let c = generate(
+        &model,
+        &Options {
+            seed: 7,
+            ..Options::default()
+        },
+    )
+    .unwrap();
     assert_eq!(c.valid_tuples, a.valid_tuples);
 }
 
@@ -123,19 +160,52 @@ fn malformed_models_are_errors_not_panics() {
     use lattice_engine::Error;
     let base = plain(&[3, 3, 3], 2);
     let cases: Vec<Model> = vec![
-        Model { weights: vec![vec![], vec![], vec![]], ..base.clone() },
-        Model { weights: vec![vec![1.0; 3]; 2], ..base.clone() },
-        Model { strength: 0, ..base.clone() },
-        Model { strength: 4, ..base.clone() },
-        Model { sizes: vec![3, 0, 3], ..base.clone() },
-        Model { invalid_pairs: vec![((0, 3), (1, 0))], ..base.clone() },
-        Model { requires: vec![((5, 0), (1, 0))], ..base.clone() },
-        Model { higher_order: vec![(vec![(0, 0)], (2, 9))], ..base.clone() },
-        Model { forced: vec![vec![(1, 7)]], ..base.clone() },
-        Model { weights: vec![vec![f64::NAN; 3], vec![1.0; 3], vec![1.0; 3]], ..base.clone() },
+        Model {
+            weights: vec![vec![], vec![], vec![]],
+            ..base.clone()
+        },
+        Model {
+            weights: vec![vec![1.0; 3]; 2],
+            ..base.clone()
+        },
+        Model {
+            strength: 0,
+            ..base.clone()
+        },
+        Model {
+            strength: 4,
+            ..base.clone()
+        },
+        Model {
+            sizes: vec![3, 0, 3],
+            ..base.clone()
+        },
+        Model {
+            invalid_pairs: vec![((0, 3), (1, 0))],
+            ..base.clone()
+        },
+        Model {
+            requires: vec![((5, 0), (1, 0))],
+            ..base.clone()
+        },
+        Model {
+            higher_order: vec![(vec![(0, 0)], (2, 9))],
+            ..base.clone()
+        },
+        Model {
+            forced: vec![vec![(1, 7)]],
+            ..base.clone()
+        },
+        Model {
+            weights: vec![vec![f64::NAN; 3], vec![1.0; 3], vec![1.0; 3]],
+            ..base.clone()
+        },
     ];
     for model in cases {
-        assert!(matches!(generate(&model, &Options::default()), Err(Error::InvalidInput(_))), "{model:?}");
+        assert!(
+            matches!(generate(&model, &Options::default()), Err(Error::InvalidInput(_))),
+            "{model:?}"
+        );
     }
 }
 
@@ -156,7 +226,10 @@ fn feasibility_reports_impossible_forced_sets_before_unsatisfiable_models() {
     let mut engine = Engine::new(none.clone()).unwrap();
     assert_eq!(engine.feasibility(), Err(Error::NoValidAssignments));
     none.forced = vec![vec![(0, 0)]];
-    assert_eq!(Engine::new(none).unwrap().feasibility(), Err(Error::ForcedInfeasible(0)));
+    assert_eq!(
+        Engine::new(none).unwrap().feasibility(),
+        Err(Error::ForcedInfeasible(0))
+    );
 }
 
 #[test]

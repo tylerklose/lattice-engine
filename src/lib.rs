@@ -38,7 +38,12 @@ pub struct Options {
 
 impl Default for Options {
     fn default() -> Self {
-        Options { seed: 42, candidates: 16, shrink_steps: 1_000_000, patience: 10_000 }
+        Options {
+            seed: 42,
+            candidates: 16,
+            shrink_steps: 1_000_000,
+            patience: 10_000,
+        }
     }
 }
 
@@ -150,7 +155,16 @@ impl Coverage {
             }
         }
         let total = remaining.iter().sum();
-        Coverage { sizes: sizes.to_vec(), combos, strides, flags, remaining, total, value_counts, by_parameter }
+        Coverage {
+            sizes: sizes.to_vec(),
+            combos,
+            strides,
+            flags,
+            remaining,
+            total,
+            value_counts,
+            by_parameter,
+        }
     }
 
     fn offset_of(&self, combo_i: usize, row: &[usize]) -> usize {
@@ -188,7 +202,9 @@ impl Coverage {
     }
 
     fn gain(&self, row: &[usize]) -> usize {
-        (0..self.combos.len()).map(|i| self.flags[i][self.offset_of(i, row)] as usize).sum()
+        (0..self.combos.len())
+            .map(|i| self.flags[i][self.offset_of(i, row)] as usize)
+            .sum()
     }
 
     fn cover_row(&mut self, row: &[usize]) -> usize {
@@ -216,7 +232,11 @@ impl Coverage {
     }
 
     fn tuple_at(&self, combo_i: usize, index: usize) -> Vec<Assignment> {
-        self.combos[combo_i].iter().copied().zip(self.values_at(combo_i, index)).collect()
+        self.combos[combo_i]
+            .iter()
+            .copied()
+            .zip(self.values_at(combo_i, index))
+            .collect()
     }
 
     fn uncovered_in(&self, combo_i: usize) -> Vec<Vec<Assignment>> {
@@ -289,7 +309,11 @@ impl Constraints {
         let mut added: Vec<Assignment> = Vec::new();
         let mut queue = vec![(p, v)];
         while let Some((q, w)) = queue.pop() {
-            let current = if row[q] != NONE { Some(row[q]) } else { added.iter().find(|a| a.0 == q).map(|a| a.1) };
+            let current = if row[q] != NONE {
+                Some(row[q])
+            } else {
+                added.iter().find(|a| a.0 == q).map(|a| a.1)
+            };
             if let Some(c) = current {
                 if c != w {
                     return None;
@@ -309,7 +333,13 @@ impl Constraints {
             }
         }
         if !self.higher.is_empty() {
-            let value = |r: usize| if row[r] != NONE { Some(row[r]) } else { added.iter().find(|a| a.0 == r).map(|a| a.1) };
+            let value = |r: usize| {
+                if row[r] != NONE {
+                    Some(row[r])
+                } else {
+                    added.iter().find(|a| a.0 == r).map(|a| a.1)
+                }
+            };
             for (antecedents, forbidden) in &self.higher {
                 if value(forbidden.0) == Some(forbidden.1) && antecedents.iter().all(|&(a, b)| value(a) == Some(b)) {
                     return None;
@@ -433,7 +463,9 @@ fn build_row(
         // weight win, then the lower value; ties keep the earlier value.
         let mut best: Option<(ValueKey, Vec<Assignment>)> = None;
         for v in 0..model.sizes[p] {
-            let Some(added) = constraints.extend(&row, p, v) else { continue };
+            let Some(added) = constraints.extend(&row, p, v) else {
+                continue;
+            };
             if constraints.is_touched[p] {
                 trial.copy_from_slice(&row);
                 for &(q, w) in &added {
@@ -461,7 +493,10 @@ fn build_row(
             let better = match &best {
                 None => true,
                 Some((b, _)) => {
-                    (key.0, key.1).cmp(&(b.0, b.1)).then(key.2.partial_cmp(&b.2).unwrap()).then(b.3.cmp(&key.3))
+                    (key.0, key.1)
+                        .cmp(&(b.0, b.1))
+                        .then(key.2.partial_cmp(&b.2).unwrap())
+                        .then(b.3.cmp(&key.3))
                         == std::cmp::Ordering::Greater
                 }
             };
@@ -490,7 +525,10 @@ fn check(model: &Model) -> Result<(), Error> {
     let bad = |message: String| Err(Error::InvalidInput(message));
     let n = model.sizes.len();
     if model.strength == 0 || model.strength > n {
-        return bad(format!("strength {} must be between 1 and the parameter count {n}", model.strength));
+        return bad(format!(
+            "strength {} must be between 1 and the parameter count {n}",
+            model.strength
+        ));
     }
     if let Some(p) = model.sizes.iter().position(|&size| size == 0) {
         return bad(format!("parameter {p} has no values"));
@@ -500,7 +538,11 @@ fn check(model: &Model) -> Result<(), Error> {
     }
     for (p, weights) in model.weights.iter().enumerate() {
         if weights.len() != model.sizes[p] {
-            return bad(format!("parameter {p} has {} values but {} weights", model.sizes[p], weights.len()));
+            return bad(format!(
+                "parameter {p} has {} values but {} weights",
+                model.sizes[p],
+                weights.len()
+            ));
         }
         if weights.iter().any(|w| !w.is_finite()) {
             return bad(format!("parameter {p} has a weight that is not a finite number"));
@@ -508,7 +550,10 @@ fn check(model: &Model) -> Result<(), Error> {
     }
     let in_range = |&(p, v): &Assignment| p < n && v < model.sizes[p];
     let pairs = model.invalid_pairs.iter().chain(&model.requires);
-    let singles = model.higher_order.iter().flat_map(|(a, f)| a.iter().chain(std::iter::once(f)));
+    let singles = model
+        .higher_order
+        .iter()
+        .flat_map(|(a, f)| a.iter().chain(std::iter::once(f)));
     let forced = model.forced.iter().flatten();
     for assignment in pairs.flat_map(|(a, b)| [a, b]).chain(singles).chain(forced) {
         if !in_range(assignment) {
@@ -538,7 +583,10 @@ impl Engine {
 
     /// Whether some valid row contains every one of `assignments`.
     pub fn can_complete(&mut self, assignments: &[Assignment]) -> Result<bool, Error> {
-        if let Some(bad) = assignments.iter().find(|&&(p, v)| p >= self.model.sizes.len() || v >= self.model.sizes[p]) {
+        if let Some(bad) = assignments
+            .iter()
+            .find(|&&(p, v)| p >= self.model.sizes.len() || v >= self.model.sizes[p])
+        {
             return Err(Error::InvalidInput(format!("assignment {bad:?} is out of range")));
         }
         Ok(self.constraints.can_complete(assignments))
@@ -587,7 +635,11 @@ fn build(model: &Model, constraints: &mut Constraints, options: &Options) -> Res
         }
     }
     let valid_tuples = coverage.total - infeasible;
-    let need: Vec<Vec<bool>> = coverage.flags.iter().map(|f| f.iter().map(|&x| x != 0).collect()).collect();
+    let need: Vec<Vec<bool>> = coverage
+        .flags
+        .iter()
+        .map(|f| f.iter().map(|&x| x != 0).collect())
+        .collect();
     let mut rows: Vec<Vec<usize>> = Vec::new();
     let mut rng = SplitMix64::new(options.seed);
     let mut seeds: std::collections::VecDeque<Vec<Assignment>> = model.forced.iter().cloned().collect();
@@ -610,7 +662,9 @@ fn build(model: &Model, constraints: &mut Constraints, options: &Options) -> Res
             } else {
                 &starts[(rng.next_u64() % starts.len() as u64) as usize]
             };
-            let Some(row) = build_row(begin, attempt, &mut rng, model, constraints, &coverage) else { continue };
+            let Some(row) = build_row(begin, attempt, &mut rng, model, constraints, &coverage) else {
+                continue;
+            };
             let gain = coverage.gain(&row);
             if best_row.as_ref().is_none_or(|(g, _)| gain > *g) {
                 best_row = Some((gain, row));
@@ -630,12 +684,24 @@ fn build(model: &Model, constraints: &mut Constraints, options: &Options) -> Res
     let space = shrink::Space::new(&model.sizes, &coverage.combos, &coverage.strides, need);
     let rows = if options.shrink_steps > 0 {
         let valid = |row: &[usize]| constraints.row_valid(row);
-        shrink::shrink(&space, rows, &model.forced, options.shrink_steps, options.patience, &mut rng, &valid)
+        shrink::shrink(
+            &space,
+            rows,
+            &model.forced,
+            options.shrink_steps,
+            options.patience,
+            &mut rng,
+            &valid,
+        )
     } else {
         rows
     };
     let (rows, new_coverage) = shrink::order_by_coverage(&space, rows);
-    Ok(Generated { rows, new_coverage, valid_tuples })
+    Ok(Generated {
+        rows,
+        new_coverage,
+        valid_tuples,
+    })
 }
 
 /// Drops rows whose every tuple another row also covers, last row first.
@@ -643,7 +709,11 @@ fn prune(rows: Vec<Vec<usize>>, coverage: &Coverage) -> Vec<Vec<usize>> {
     let mut counts: HashMap<(usize, usize), usize> = HashMap::new();
     let keys: Vec<Vec<(usize, usize)>> = rows
         .iter()
-        .map(|row| (0..coverage.combos.len()).map(|i| (i, coverage.offset_of(i, row))).collect())
+        .map(|row| {
+            (0..coverage.combos.len())
+                .map(|i| (i, coverage.offset_of(i, row)))
+                .collect()
+        })
         .collect();
     for row_keys in &keys {
         for key in row_keys {
@@ -659,7 +729,11 @@ fn prune(rows: Vec<Vec<usize>>, coverage: &Coverage) -> Vec<Vec<usize>> {
             }
         }
     }
-    rows.into_iter().zip(keep).filter(|(_, k)| *k).map(|(row, _)| row).collect()
+    rows.into_iter()
+        .zip(keep)
+        .filter(|(_, k)| *k)
+        .map(|(row, _)| row)
+        .collect()
 }
 
 #[cfg(test)]
@@ -676,7 +750,10 @@ mod tests {
 
     #[test]
     fn combinations_in_lexicographic_order() {
-        assert_eq!(combinations(4, 2), vec![vec![0, 1], vec![0, 2], vec![0, 3], vec![1, 2], vec![1, 3], vec![2, 3]]);
+        assert_eq!(
+            combinations(4, 2),
+            vec![vec![0, 1], vec![0, 2], vec![0, 3], vec![1, 2], vec![1, 3], vec![2, 3]]
+        );
         assert_eq!(combinations(3, 3), vec![vec![0, 1, 2]]);
     }
 }

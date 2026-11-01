@@ -33,7 +33,13 @@ impl<'a> Space<'a> {
                 combos_of[p].push(i);
             }
         }
-        Space { sizes, combos, strides, combos_of, need }
+        Space {
+            sizes,
+            combos,
+            strides,
+            combos_of,
+            need,
+        }
     }
 
     fn offset(&self, c: usize, row: &[usize]) -> usize {
@@ -231,7 +237,12 @@ impl<'a, 'b> State<'a, 'b> {
     }
 
     /// Row `r` rewritten to cover `tuple`: (new row, changed parameters), if allowed.
-    fn candidate(&self, r: usize, tuple: &[Assignment], valid: &dyn Fn(&[usize]) -> bool) -> Option<(Vec<usize>, Vec<usize>)> {
+    fn candidate(
+        &self,
+        r: usize,
+        tuple: &[Assignment],
+        valid: &dyn Fn(&[usize]) -> bool,
+    ) -> Option<(Vec<usize>, Vec<usize>)> {
         let mut new = self.rows[r].clone();
         let mut changed = Vec::new();
         for &(p, v) in tuple {
@@ -244,7 +255,10 @@ impl<'a, 'b> State<'a, 'b> {
             return None;
         }
         for f in 0..self.forced.len() {
-            if self.forced_count[f] == 1 && Self::holds(&self.rows[r], &self.forced[f]) && !Self::holds(&new, &self.forced[f]) {
+            if self.forced_count[f] == 1
+                && Self::holds(&self.rows[r], &self.forced[f])
+                && !Self::holds(&new, &self.forced[f])
+            {
                 return None;
             }
         }
@@ -266,7 +280,10 @@ pub fn shrink(
     let mut best = rows;
     let mut step: u64 = 0;
     while step < budget && state.rows.len() > 1 {
-        let Some(r) = (0..state.rows.len()).filter(|&r| state.removable(r)).min_by_key(|&r| (state.unique(r), r)) else {
+        let Some(r) = (0..state.rows.len())
+            .filter(|&r| state.removable(r))
+            .min_by_key(|&r| (state.unique(r), r))
+        else {
             break;
         };
         state.remove_row(r);
@@ -289,9 +306,13 @@ pub fn shrink(
             } else {
                 let mut chosen: Option<(i64, usize, Vec<usize>, Vec<usize>)> = None;
                 for r in 0..n {
-                    let Some((new, changed)) = state.candidate(r, &tuple, valid) else { continue };
+                    let Some((new, changed)) = state.candidate(r, &tuple, valid) else {
+                        continue;
+                    };
                     let delta = state.delta(r, &new, &changed);
-                    let tabu = changed.iter().any(|&p| state.last_change[r][p] != 0 && state.last_change[r][p] + TABU_TENURE > step);
+                    let tabu = changed
+                        .iter()
+                        .any(|&p| state.last_change[r][p] != 0 && state.last_change[r][p] + TABU_TENURE > step);
                     let after = state.uncovered.len() as i64 - delta;
                     if tabu && after >= fewest as i64 {
                         continue;
