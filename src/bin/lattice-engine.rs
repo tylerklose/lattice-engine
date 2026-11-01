@@ -17,7 +17,6 @@ struct Input {
     seed: u64,
     #[serde(default = "default_candidates")]
     candidates: usize,
-    max_rows: Option<usize>,
     #[serde(default = "default_shrink_steps")]
     shrink_steps: u64,
     #[serde(default = "default_patience")]
@@ -48,12 +47,12 @@ fn main() {
             .collect(),
         forced: input.forced.into_iter().map(|f| f.into_iter().map(|x| (x[0], x[1])).collect()).collect(),
     };
-    let options = Options { seed: input.seed, candidates: input.candidates, max_rows: input.max_rows, shrink_steps: input.shrink_steps, patience: input.patience };
+    let options = Options { seed: input.seed, candidates: input.candidates, shrink_steps: input.shrink_steps, patience: input.patience };
     let started = Instant::now();
     match generate(&model, &options) {
         Ok(result) => {
             let seconds = started.elapsed().as_secs_f64();
-            println!("{}", serde_json::json!({"rows": result.rows, "valid_tuples": result.valid_tuples, "seconds": seconds}));
+            println!("{}", serde_json::json!({"rows": result.rows, "new_coverage": result.new_coverage, "valid_tuples": result.valid_tuples, "seconds": seconds}));
         }
         Err(error) => {
             eprintln!("{error:?}");

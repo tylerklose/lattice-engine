@@ -31,8 +31,8 @@ pub struct Model {
 #[derive(Debug, Clone)]
 pub struct Options {
     pub seed: u64,
+    /// Candidate rows built per greedy step; the one covering the most wins.
     pub candidates: usize,
-    pub max_rows: Option<usize>,
     /// Tabu-search steps for removing rows after the greedy build (0 = off).
     pub shrink_steps: u64,
     /// A removal attempt gives up after this many steps without progress.
@@ -41,13 +41,17 @@ pub struct Options {
 
 impl Default for Options {
     fn default() -> Self {
-        Options { seed: 42, candidates: 16, max_rows: None, shrink_steps: 1_000_000, patience: 10_000 }
+        Options { seed: 42, candidates: 16, shrink_steps: 1_000_000, patience: 10_000 }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Generated {
+    /// Rows ordered so each adds the most new coverage.
     pub rows: Vec<Vec<usize>>,
+    /// Valid tuples each row covers for the first time, in row order.
+    pub new_coverage: Vec<usize>,
+    /// Valid tuples in total (tuples no valid row can contain are left out).
     pub valid_tuples: usize,
 }
 
@@ -506,11 +510,6 @@ pub fn generate(model: &Model, options: &Options) -> Result<Generated, Error> {
     let mut seeds: std::collections::VecDeque<Vec<Assignment>> = model.forced.iter().cloned().collect();
 
     loop {
-        if let Some(max) = options.max_rows {
-            if rows.len() >= max {
-                break;
-            }
-        }
         let (start, starts) = if let Some(forced) = seeds.pop_front() {
             (forced.clone(), vec![forced])
         } else {
@@ -544,14 +543,16 @@ pub fn generate(model: &Model, options: &Options) -> Result<Generated, Error> {
         }
         rows.push(row);
     }
-    let mut rows = prune(rows, &coverage);
-    if options.shrink_steps > 0 && options.max_rows.is_none() {
-        let space = shrink::Space::new(&model.sizes, &coverage.combos, &coverage.strides, need);
+    let rows = prune(rows, &coverage);
+    let space = shrink::Space::new(&model.sizes, &coverage.combos, &coverage.strides, need);
+    let rows = if options.shrink_steps > 0 {
         let valid = |row: &[usize]| constraints.row_valid(row);
-        rows = shrink::shrink(&space, rows, &model.forced, options.shrink_steps, options.patience, &mut rng, &valid);
-        rows = shrink::order_by_coverage(&space, rows);
-    }
-    Ok(Generated { rows, valid_tuples })
+        shrink::shrink(&space, rows, &model.forced, options.shrink_steps, options.patience, &mut rng, &valid)
+    } else {
+        rows
+    };
+    let (rows, new_coverage) = shrink::order_by_coverage(&space, rows);
+    Ok(Generated { rows, new_coverage, valid_tuples })
 }
 
 /// Drops rows whose every tuple another row also covers, last row first.

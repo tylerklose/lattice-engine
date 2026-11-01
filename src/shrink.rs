@@ -319,10 +319,12 @@ pub fn shrink(
 }
 
 /// Orders rows so each one adds the most new coverage (lowest index on ties).
-pub fn order_by_coverage(space: &Space, rows: Vec<Vec<usize>>) -> Vec<Vec<usize>> {
+/// Returns the rows and how many tuples each covers for the first time.
+pub fn order_by_coverage(space: &Space, rows: Vec<Vec<usize>>) -> (Vec<Vec<usize>>, Vec<usize>) {
     let mut covered: Vec<Vec<bool>> = space.need.iter().map(|n| vec![false; n.len()]).collect();
     let mut left = rows;
     let mut out = Vec::with_capacity(left.len());
+    let mut gains = Vec::with_capacity(left.len());
     while !left.is_empty() {
         let mut best = (0usize, 0usize);
         for (i, row) in left.iter().enumerate() {
@@ -342,6 +344,7 @@ pub fn order_by_coverage(space: &Space, rows: Vec<Vec<usize>>) -> Vec<Vec<usize>
             covered[c][index] = true;
         }
         out.push(row);
+        gains.push(best.0);
     }
-    out
+    (out, gains)
 }
