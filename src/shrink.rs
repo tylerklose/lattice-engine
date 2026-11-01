@@ -274,11 +274,11 @@ pub fn shrink(
         let mut last_progress = step;
         while !state.uncovered.is_empty() && step < budget && step - last_progress < patience {
             step += 1;
-            let pick = state.uncovered[(rng.next() % state.uncovered.len() as u64) as usize];
+            let pick = state.uncovered[(rng.next_u64() % state.uncovered.len() as u64) as usize];
             let tuple = space.tuple(pick.0, pick.1);
             let n = state.rows.len();
-            if rng.next() % WALK_ONE_IN == 0 {
-                let from = (rng.next() % n as u64) as usize;
+            if rng.next_u64() % WALK_ONE_IN == 0 {
+                let from = (rng.next_u64() % n as u64) as usize;
                 for k in 0..n {
                     let r = (from + k) % n;
                     if let Some((new, changed)) = state.candidate(r, &tuple, valid) {
@@ -339,9 +339,8 @@ pub fn order_by_coverage(space: &Space, rows: Vec<Vec<usize>>) -> (Vec<Vec<usize
             }
         }
         let row = left.remove(best.1);
-        for c in 0..space.combos.len() {
-            let index = space.offset(c, &row);
-            covered[c][index] = true;
+        for (c, flags) in covered.iter_mut().enumerate() {
+            flags[space.offset(c, &row)] = true;
         }
         out.push(row);
         gains.push(best.0);

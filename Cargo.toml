@@ -2,9 +2,15 @@
 name = "lattice-engine"
 version = "0.1.0"
 edition = "2024"
-description = "Deterministic pairwise and t-way covering-array generation with constraints."
-license = "MIT"
-publish = false
+description = "Deterministic pairwise and t-way covering arrays with constraints: few rows, every valid combination covered."
+license = "Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/tylerklose/lattice-engine"
+homepage = "https://github.com/tylerklose/lattice"
+keywords = ["pairwise", "combinatorial", "covering-array", "testing", "t-way"]
+categories = ["development-tools::testing", "algorithms"]
+rust-version = "1.85"
+exclude = ["target/"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"], optional = true }

@@ -1,10 +1,7 @@
-//! Deterministic t-way covering-array generation with constraints.
+#![doc = include_str!("../README.md")]
 //!
-//! The engine works on a compiled model: value counts per parameter, weights, and
-//! constraints already reduced to four primitives (invalid pairs, requirements,
-//! higher-order exclusions and forced interactions). The Ruby and Python Lattice
-//! packages compile schemas to this form, and their pure implementations follow
-//! the same steps, so all three give byte-identical rows for the same input.
+//! The Ruby and Python Lattice packages compile schemas to [`Model`] and call
+//! [`Engine`], so both give byte-identical rows for the same input.
 
 use std::collections::HashMap;
 
@@ -75,7 +72,7 @@ impl SplitMix64 {
         SplitMix64(seed)
     }
 
-    pub fn next(&mut self) -> u64 {
+    pub fn next_u64(&mut self) -> u64 {
         self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
         let mut z = self.0;
         z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
@@ -146,8 +143,8 @@ impl Coverage {
             flags.push(vec![1u8; span]);
             remaining.push(span);
             for &p in combo {
-                for v in 0..sizes[p] {
-                    value_counts[p][v] += span / sizes[p];
+                for count in value_counts[p].iter_mut() {
+                    *count += span / sizes[p];
                 }
                 by_parameter[p].push((i, combo.iter().copied().filter(|&q| q != p).collect()));
             }
@@ -301,7 +298,7 @@ impl Constraints {
             }
             if let Some(blocked) = self.invalid.get(&(q, w)) {
                 for &(r, x) in blocked {
-                    if row[r] == x || added.iter().any(|&a| a == (r, x)) {
+                    if row[r] == x || added.contains(&(r, x)) {
                         return None;
                     }
                 }
@@ -400,6 +397,8 @@ impl Constraints {
     }
 }
 
+type ValueKey = (usize, usize, f64, usize);
+
 fn build_row(
     start: &[Assignment],
     attempt: usize,
@@ -421,7 +420,7 @@ fn build_row(
     open.sort_by(|&a, &b| totals[b].cmp(&totals[a]).then(a.cmp(&b)));
     if attempt > 0 {
         for i in (1..open.len()).rev() {
-            let j = (rng.next() % (i as u64 + 1)) as usize;
+            let j = (rng.next_u64() % (i as u64 + 1)) as usize;
             open.swap(i, j);
         }
     }
@@ -430,8 +429,9 @@ fn build_row(
         if row[p] != NONE {
             continue;
         }
-        // key: (gain, value count, weight, -value); strictly greater wins.
-        let mut best: Option<((usize, usize, f64, usize), Vec<Assignment>)> = None;
+        // key: (gain, value count, weight, value); higher gain, count and
+        // weight win, then the lower value; ties keep the earlier value.
+        let mut best: Option<(ValueKey, Vec<Assignment>)> = None;
         for v in 0..model.sizes[p] {
             let Some(added) = constraints.extend(&row, p, v) else { continue };
             if constraints.is_touched[p] {
@@ -608,7 +608,7 @@ fn build(model: &Model, constraints: &mut Constraints, options: &Options) -> Res
             let begin = if attempt % 2 == 0 || starts.len() == 1 {
                 &start
             } else {
-                &starts[(rng.next() % starts.len() as u64) as usize]
+                &starts[(rng.next_u64() % starts.len() as u64) as usize]
             };
             let Some(row) = build_row(begin, attempt, &mut rng, model, constraints, &coverage) else { continue };
             let gain = coverage.gain(&row);
@@ -670,8 +670,8 @@ mod tests {
     fn splitmix_matches_reference_values() {
         // Reference values for SplitMix64 seeded with 0 (Vigna's published sequence).
         let mut rng = SplitMix64::new(0);
-        assert_eq!(rng.next(), 0xE220_A839_7B1D_CDAF);
-        assert_eq!(rng.next(), 0x6E78_9E6A_A1B9_65F4);
+        assert_eq!(rng.next_u64(), 0xE220_A839_7B1D_CDAF);
+        assert_eq!(rng.next_u64(), 0x6E78_9E6A_A1B9_65F4);
     }
 
     #[test]
