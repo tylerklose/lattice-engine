@@ -57,6 +57,8 @@ pub struct Generated {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Error {
+    /// The model is malformed: the message says how.
+    InvalidInput(String),
     NoValidAssignments,
     DeadEnd,
     InvalidRow(Vec<usize>),
@@ -481,7 +483,41 @@ fn same_assignments(a: &[Assignment], b: &[Assignment]) -> bool {
     a == b
 }
 
+/// Rejects malformed models before any indexing can go out of range.
+fn check(model: &Model) -> Result<(), Error> {
+    let bad = |message: String| Err(Error::InvalidInput(message));
+    let n = model.sizes.len();
+    if model.strength == 0 || model.strength > n {
+        return bad(format!("strength {} must be between 1 and the parameter count {n}", model.strength));
+    }
+    if let Some(p) = model.sizes.iter().position(|&size| size == 0) {
+        return bad(format!("parameter {p} has no values"));
+    }
+    if model.weights.len() != n {
+        return bad(format!("{} weight lists for {n} parameters", model.weights.len()));
+    }
+    for (p, weights) in model.weights.iter().enumerate() {
+        if weights.len() != model.sizes[p] {
+            return bad(format!("parameter {p} has {} values but {} weights", model.sizes[p], weights.len()));
+        }
+        if weights.iter().any(|w| !w.is_finite()) {
+            return bad(format!("parameter {p} has a weight that is not a finite number"));
+        }
+    }
+    let in_range = |&(p, v): &Assignment| p < n && v < model.sizes[p];
+    let pairs = model.invalid_pairs.iter().chain(&model.requires);
+    let singles = model.higher_order.iter().flat_map(|(a, f)| a.iter().chain(std::iter::once(f)));
+    let forced = model.forced.iter().flatten();
+    for assignment in pairs.flat_map(|(a, b)| [a, b]).chain(singles).chain(forced) {
+        if !in_range(assignment) {
+            return bad(format!("assignment {assignment:?} is out of range"));
+        }
+    }
+    Ok(())
+}
+
 pub fn generate(model: &Model, options: &Options) -> Result<Generated, Error> {
+    check(model)?;
     let mut constraints = Constraints::new(model);
     if !constraints.can_complete(&[]) {
         return Err(Error::NoValidAssignments);

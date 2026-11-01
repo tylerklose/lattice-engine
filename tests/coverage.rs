@@ -117,3 +117,24 @@ fn unsatisfiable_model_is_an_error() {
     model.invalid_pairs = vec![((0, 0), (1, 0)), ((0, 0), (1, 1)), ((0, 1), (1, 0)), ((0, 1), (1, 1))];
     assert!(generate(&model, &Options::default()).is_err());
 }
+
+#[test]
+fn malformed_models_are_errors_not_panics() {
+    use lattice_engine::Error;
+    let base = plain(&[3, 3, 3], 2);
+    let cases: Vec<Model> = vec![
+        Model { weights: vec![vec![], vec![], vec![]], ..base.clone() },
+        Model { weights: vec![vec![1.0; 3]; 2], ..base.clone() },
+        Model { strength: 0, ..base.clone() },
+        Model { strength: 4, ..base.clone() },
+        Model { sizes: vec![3, 0, 3], ..base.clone() },
+        Model { invalid_pairs: vec![((0, 3), (1, 0))], ..base.clone() },
+        Model { requires: vec![((5, 0), (1, 0))], ..base.clone() },
+        Model { higher_order: vec![(vec![(0, 0)], (2, 9))], ..base.clone() },
+        Model { forced: vec![vec![(1, 7)]], ..base.clone() },
+        Model { weights: vec![vec![f64::NAN; 3], vec![1.0; 3], vec![1.0; 3]], ..base.clone() },
+    ];
+    for model in cases {
+        assert!(matches!(generate(&model, &Options::default()), Err(Error::InvalidInput(_))), "{model:?}");
+    }
+}
