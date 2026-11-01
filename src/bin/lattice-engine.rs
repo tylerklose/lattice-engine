@@ -18,7 +18,14 @@ struct Input {
     #[serde(default = "default_candidates")]
     candidates: usize,
     max_rows: Option<usize>,
+    #[serde(default = "default_shrink_steps")]
+    shrink_steps: u64,
+    #[serde(default = "default_patience")]
+    patience: u64,
 }
+
+fn default_patience() -> u64 { 10_000 }
+fn default_shrink_steps() -> u64 { 1_000_000 }
 
 fn default_seed() -> u64 { 42 }
 fn default_candidates() -> usize { 16 }
@@ -41,7 +48,7 @@ fn main() {
             .collect(),
         forced: input.forced.into_iter().map(|f| f.into_iter().map(|x| (x[0], x[1])).collect()).collect(),
     };
-    let options = Options { seed: input.seed, candidates: input.candidates, max_rows: input.max_rows };
+    let options = Options { seed: input.seed, candidates: input.candidates, max_rows: input.max_rows, shrink_steps: input.shrink_steps, patience: input.patience };
     let started = Instant::now();
     match generate(&model, &options) {
         Ok(result) => {

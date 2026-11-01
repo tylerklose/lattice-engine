@@ -8,6 +8,8 @@
 
 use std::collections::HashMap;
 
+pub mod shrink;
+
 pub type Assignment = (usize, usize);
 
 /// A model reduced to what generation needs.
@@ -31,11 +33,15 @@ pub struct Options {
     pub seed: u64,
     pub candidates: usize,
     pub max_rows: Option<usize>,
+    /// Tabu-search steps for removing rows after the greedy build (0 = off).
+    pub shrink_steps: u64,
+    /// A removal attempt gives up after this many steps without progress.
+    pub patience: u64,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { seed: 42, candidates: 16, max_rows: None }
+        Options { seed: 42, candidates: 16, max_rows: None, shrink_steps: 1_000_000, patience: 10_000 }
     }
 }
 
@@ -494,6 +500,7 @@ pub fn generate(model: &Model, options: &Options) -> Result<Generated, Error> {
         }
     }
     let valid_tuples = coverage.total - infeasible;
+    let need: Vec<Vec<bool>> = coverage.flags.iter().map(|f| f.iter().map(|&x| x != 0).collect()).collect();
     let mut rows: Vec<Vec<usize>> = Vec::new();
     let mut rng = SplitMix64::new(options.seed);
     let mut seeds: std::collections::VecDeque<Vec<Assignment>> = model.forced.iter().cloned().collect();
@@ -537,7 +544,13 @@ pub fn generate(model: &Model, options: &Options) -> Result<Generated, Error> {
         }
         rows.push(row);
     }
-    let rows = prune(rows, &coverage);
+    let mut rows = prune(rows, &coverage);
+    if options.shrink_steps > 0 && options.max_rows.is_none() {
+        let space = shrink::Space::new(&model.sizes, &coverage.combos, &coverage.strides, need);
+        let valid = |row: &[usize]| constraints.row_valid(row);
+        rows = shrink::shrink(&space, rows, &model.forced, options.shrink_steps, options.patience, &mut rng, &valid);
+        rows = shrink::order_by_coverage(&space, rows);
+    }
     Ok(Generated { rows, valid_tuples })
 }
 
